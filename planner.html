@@ -1,758 +1,471 @@
-
 <!DOCTYPE html>
-<html lang="id">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Planner – Sales Route</title>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Planner & Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-      :root {
-        --bg: #0b1220;
-        --fg: #eaf0ff;
-        --muted: #95a3b3;
-        --accent: #5eead4;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
-          "Helvetica Neue", Arial;
-        background: var(--bg);
-        color: var(--fg);
-      }
-      header {
-        padding: 12px 16px;
-        border-bottom: 1px solid #1b2233;
-        display: flex;
-        gap: 12px;
-        align-items: center;
-      }
-      h1 {
-        font-size: 18px;
-        margin: 0;
-      }
-      .container {
-        display: grid;
-        grid-template-columns: 320px 1fr;
-        height: calc(100vh - 56px);
-      }
-      #sidebar {
-        border-right: 1px solid #1b2233;
-        padding: 12px;
-        overflow: auto;
-      }
-      #map {
-        height: 100%;
-        width: 100%;
-      }
-      button,
-      input[type="number"] {
-        background: #121a2a;
-        color: var(--fg);
-        border: 1px solid #28324a;
-        padding: 8px 10px;
-        border-radius: 10px;
-        cursor: pointer;
-      }
-      button:hover {
-        border-color: #34405c;
-      }
-      .row {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-        margin: 6px 0;
-      }
-      .list {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        margin-top: 8px;
-      }
-      .wp {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        background: #0f1729;
-        border: 1px solid #1e2740;
-        border-radius: 12px;
-        padding: 8px;
-      }
-      .wp small {
-        color: var(--muted);
-      }
-      .drag {
-        cursor: grab;
-        user-select: none;
-        opacity: 0.8;
-      }
-      .pill {
-        display: inline-block;
-        padding: 2px 8px;
-        border: 1px dashed #334;
-        border-radius: 999px;
-        color: var(--muted);
-      }
-      .danger {
-        border-color: #6b2737;
-        color: #ffb3c1;
-      }
-      details {
-        border: 1px solid #1e2740;
-        border-radius: 12px;
-        padding: 8px;
-      }
-      summary {
-        cursor: pointer;
-        color: var(--accent);
-      }
-      a {
-        color: var(--accent);
-      }
-      .sep {
-        height: 1px;
-        background: #162036;
-        margin: 12px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>🗺️ Planner – Sales Route</h1>
-      <span class="pill">Klik peta untuk tambah titik</span>
-    </header>
-    <div class="container">
-      <aside id="sidebar">
-        <div class="row">
-          <label>Radius validasi (meter):</label>
-          <input id="radius" type="number" min="5" step="5" value="50" />
-          <button id="clear">Hapus semua</button>
-        </div>
-        <div class="row">
-          <button id="exportPlan">💾 Ekspor Rencana (.json)</button>
-          <input id="filePlan" type="file" accept="application/json" />
-          <button id="importPlan">📥 Impor Rencana</button>
-        </div>
-        <div class="sep"></div>
-        <h3>Rute / Titik</h3>
-        <div id="wpList" class="list"></div>
-
-        <div class="sep"></div>
-        <details>
-          <summary>Verifikasi hasil perjalanan</summary>
-          <div class="row" style="margin-top: 8px">
-            <input id="journeyFile" type="file" accept="application/json" />
-            <button id="verifyBtn">🔍 Verifikasi</button>
-          </div>
-          <p id="verifyResult"></p>
-        </details>
-
-        <div class="sep"></div>
-        <p>
-          <small
-            >Tips: drag & drop item untuk ubah urutan. Klik koordinat untuk
-            fokus di peta.</small
-          >
-        </p>
-      </aside>
-      <div id="map"></div>
-    </div>
-
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
-    <script>
-      // --- State ---
-      let waypoints = []; // {id, lat, lng}
-      let markers = []; // Leaflet markers
-      let polyline = null;
-      const map = L.map("map");
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
-      map.setView([-6.1754, 106.8272], 12); // Monas as default center
-
-      // Restore plan from localStorage
-      const saved = localStorage.getItem("sales_plan");
-      if (saved) {
-        try {
-          const obj = JSON.parse(saved);
-          if (obj && Array.isArray(obj.waypoints)) {
-            waypoints = obj.waypoints;
-            document.getElementById("radius").value = obj.radius || 50;
-          }
-        } catch (e) {}
-      }
-
-      function render() {
-        // Clear markers/polyline
-        markers.forEach((m) => map.removeLayer(m));
-        markers = [];
-        if (polyline) {
-          map.removeLayer(polyline);
-          polyline = null;
+        #map { height: 100%; min-height: 400px; }
+        .sidebar {
+            transition: all 0.3s ease;
+            overflow-y: auto;
         }
-
-        // Draw markers and path
-        const latlngs = [];
-        waypoints.forEach((wp, idx) => {
-          const m = L.marker([wp.lat, wp.lng], { draggable: true }).addTo(map);
-          m.bindTooltip(`#${idx + 1}`, { permanent: true, direction: "top" });
-          m.on("dragend", (e) => {
-            const { lat, lng } = e.target.getLatLng();
-            wp.lat = lat;
-            wp.lng = lng;
-            persist();
-            renderList();
-            drawPath();
-          });
-          m.on("click", () => {
-            map.panTo([wp.lat, wp.lng]);
-          });
-          markers.push(m);
-          latlngs.push([wp.lat, wp.lng]);
-        });
-        drawPath();
-      }
-
-      function drawPath() {
-        if (polyline) {
-          map.removeLayer(polyline);
-          polyline = null;
+        .sidebar.collapsed {
+            width: 0 !important;
+            padding: 0 !important;
+            overflow: hidden;
         }
-        const latlngs = waypoints.map((w) => [w.lat, w.lng]);
-        if (latlngs.length > 1)
-          polyline = L.polyline(latlngs, { weight: 4 }).addTo(map);
-      }
-
-      function persist() {
-        const radius = Number(document.getElementById("radius").value) || 50;
-        localStorage.setItem(
-          "sales_plan",
-          JSON.stringify({ radius, waypoints })
-        );
-      }
-
-      function addWaypoint(latlng) {
-        waypoints.push({
-          id: crypto.randomUUID(),
-          lat: latlng.lat,
-          lng: latlng.lng,
-        });
-        persist();
-        render();
-        renderList();
-      }
-
-      map.on("click", (e) => addWaypoint(e.latlng));
-
-      function renderList() {
-        const list = document.getElementById("wpList");
-        list.innerHTML = "";
-        waypoints.forEach((wp, idx) => {
-          const div = document.createElement("div");
-          div.className = "wp";
-          div.draggable = true;
-          div.innerHTML = `
-      <div>
-        <div><strong>#${idx + 1}</strong> <small>(${wp.lat.toFixed(
-            6
-          )}, ${wp.lng.toFixed(6)})</small></div>
-        <div class="row">
-          <button data-act="focus">Fokus</button>
-          <button data-act="del" class="danger">Hapus</button>
-        </div>
-      </div>
-      <div class="drag">↕︎</div>
-    `;
-          div.querySelector('[data-act="focus"]').onclick = () => {
-            map.setView([wp.lat, wp.lng], 17);
-          };
-          div.querySelector('[data-act="del"]').onclick = () => {
-            waypoints.splice(idx, 1);
-            persist();
-            render();
-            renderList();
-          };
-
-          // Drag & drop reorder
-          div.addEventListener("dragstart", (ev) => {
-            ev.dataTransfer.setData("text/plain", idx.toString());
-          });
-          div.addEventListener("dragover", (ev) => ev.preventDefault());
-          div.addEventListener("drop", (ev) => {
-            ev.preventDefault();
-            const from = Number(ev.dataTransfer.getData("text/plain"));
-            const to = idx;
-            if (from === to) return;
-            const [item] = waypoints.splice(from, 1);
-            waypoints.splice(to, 0, item);
-            persist();
-            render();
-            renderList();
-          });
-
-          list.appendChild(div);
-        });
-      }
-
-      render();
-      renderList();
-
-      // Controls
-
-      document.getElementById("clear").onclick = () => {
-        if (confirm("Hapus semua titik?")) {
-          waypoints = [];
-          persist();
-          render();
-          renderList();
+        .destination-item:hover {
+            background-color: #f0f9ff;
         }
-      };
-
-      document.getElementById("radius").onchange = () => persist();
-
-      // Export/Import Plan
-      function download(filename, obj) {
-        const url = URL.createObjectURL(
-          new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" })
-        );
-        const a = Object.assign(document.createElement("a"), {
-          href: url,
-          download: filename,
-        });
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
-
-      document.getElementById("exportPlan").onclick = () => {
-        const radius = Number(document.getElementById("radius").value) || 50;
-        const obj = {
-          type: "sales-plan",
-          version: 1,
-          createdAt: new Date().toISOString(),
-          radius,
-          waypoints,
-        };
-        download("sales-plan.json", obj);
-      };
-
-      document.getElementById("importPlan").onclick = () => {
-        const inp = document.getElementById("filePlan");
-        if (!inp.files[0]) {
-          alert("Pilih file rencana .json");
-          return;
+        .tab-active {
+            border-bottom: 3px solid #38bdf8;
+            color: #38bdf8;
         }
-        const r = new FileReader();
-        r.onload = () => {
-          try {
-            const obj = JSON.parse(r.result);
-            if (obj && obj.waypoints) {
-              waypoints = obj.waypoints;
-              document.getElementById("radius").value = obj.radius || 50;
-              persist();
-              render();
-              renderList();
-            } else alert("Format tidak dikenali");
-          } catch (e) {
-            alert("Gagal parse JSON");
-          }
-        };
-        r.readAsText(inp.files[0]);
-      };
-
-      // --- Verification ---
-      function haversine(a, b) {
-        const R = 6371000;
-        const toRad = (x) => (x * Math.PI) / 180;
-        const dLat = toRad(b.lat - a.lat),
-          dLon = toRad(b.lng - a.lng);
-        const lat1 = toRad(a.lat),
-          lat2 = toRad(b.lat);
-        const h =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-        return 2 * R * Math.asin(Math.sqrt(h));
-      }
-
-      function verifyJourney(plan, journey) {
-        const radius = plan.radius || 50;
-        const points = journey.track || [];
-        let idx = 0; // waypoint index
-        const hits = [];
-        for (let i = 0; i < points.length && idx < plan.waypoints.length; i++) {
-          const p = points[i];
-          const w = plan.waypoints[idx];
-          const d = haversine(
-            { lat: p.lat, lng: p.lng },
-            { lat: w.lat, lng: w.lng }
-          );
-          if (d <= radius) {
-            hits.push({ wpIndex: idx, atPoint: i, dist: d });
-            idx++;
-          }
-        }
-        const ok = idx === plan.waypoints.length;
-        return { ok, hits, visited: idx, total: plan.waypoints.length };
-      }
-
-      document.getElementById("verifyBtn").onclick = () => {
-        const jf = document.getElementById("journeyFile");
-        if (!jf.files[0]) {
-          alert("Unggah file hasil perjalanan (JSON) dari tracker");
-          return;
-        }
-        const r = new FileReader();
-        r.onload = () => {
-          try {
-            const journey = JSON.parse(r.result);
-            const plan = {
-              radius: Number(document.getElementById("radius").value) || 50,
-              waypoints,
-            };
-            const res = verifyJourney(plan, journey);
-            const msg = res.ok
-              ? `✅ Cocok: ${res.visited}/${res.total} titik tercapai berurutan.`
-              : `❌ Belum cocok: ${res.visited}/${res.total} titik yang terdeteksi berurutan.`;
-            document.getElementById("verifyResult").textContent = msg;
-          } catch (e) {
-            alert("Format hasil perjalanan tidak valid");
-          }
-        };
-        r.readAsText(jf.files[0]);
-      };
-    </script>
-  </body>
-</html>
-``` --- ## File: `tracker.html` ```html
-<!DOCTYPE html>
-<html lang="id">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tracker – Sales Route</title>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""
-    />
-    <style>
-      :root {
-        --bg: #0b1220;
-        --fg: #eaf0ff;
-        --muted: #95a3b3;
-        --accent: #5eead4;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
-          "Helvetica Neue", Arial;
-        background: var(--bg);
-        color: var(--fg);
-      }
-      header {
-        padding: 12px 16px;
-        border-bottom: 1px solid #1b2233;
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        justify-content: space-between;
-      }
-      h1 {
-        font-size: 18px;
-        margin: 0;
-      }
-      #map {
-        height: calc(100vh - 170px);
-        width: 100%;
-      }
-      .panel {
-        padding: 12px 16px;
-        display: grid;
-        gap: 8px;
-      }
-      button,
-      input[type="file"] {
-        background: #121a2a;
-        color: var(--fg);
-        border: 1px solid #28324a;
-        padding: 10px 12px;
-        border-radius: 12px;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-      }
-      .pill {
-        display: inline-block;
-        padding: 2px 8px;
-        border: 1px dashed #334;
-        border-radius: 999px;
-        color: var(--muted);
-      }
-      .ok {
-        color: #34d399;
-      }
-      .bad {
-        color: #fca5a5;
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <h1>📍 Tracker – Sales Route</h1>
-      <span class="pill">Aktifkan GPS & izinkan lokasi</span>
-    </header>
-    <div class="panel">
-      <div class="grid">
-        <div>
-          <input id="planFile" type="file" accept="application/json" />
-        </div>
-        <div>
-          <button id="startBtn">▶️ Mulai Tracking</button>
-          <button id="stopBtn" disabled>⏹️ Stop</button>
-        </div>
-      </div>
-      <div>
-        <span>Progress: </span><strong id="progress">0/0</strong>
-        <span id="status" class="pill">Idle</span>
-      </div>
-    </div>
-    <div id="map"></div>
-    <div class="panel">
-      <button id="exportJourney" disabled>
-        💾 Ekspor Hasil Perjalanan (.json)
-      </button>
-    </div>
-
-    <script
-      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      crossorigin=""
-    ></script>
-    <script>
-      let plan = null; // {radius, waypoints}
-      let visitedIdx = 0;
-      let track = []; // [{lat,lng,ts}]
-      let watchId = null;
-      let map = L.map("map");
-      let youMarker = null;
-      let routeLine = null;
-      let wMarkers = [];
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
-      map.setView([-6.1754, 106.8272], 15);
-
-      function loadPlanFromFile(file) {
-        return new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => {
-            try {
-              resolve(JSON.parse(r.result));
-            } catch (e) {
-              reject(e);
+        @media (max-width: 768px) {
+            .flex-col-reverse-md {
+                flex-direction: column-reverse;
             }
-          };
-          r.onerror = reject;
-          r.readAsText(file);
-        });
-      }
-
-      document
-        .getElementById("planFile")
-        .addEventListener("change", async (e) => {
-          const f = e.target.files[0];
-          if (!f) return;
-          try {
-            const obj = await loadPlanFromFile(f);
-            if (obj.type === "sales-plan" || obj.waypoints) {
-              plan = { radius: obj.radius || 50, waypoints: obj.waypoints };
-              visitedIdx = 0;
-              updateProgress();
-              drawWaypoints();
-              document.getElementById(
-                "status"
-              ).textContent = `Plan dimuat (radius ${plan.radius}m)`;
-            } else alert("Format rencana tidak dikenali");
-          } catch (err) {
-            alert("Gagal baca rencana: " + err.message);
-          }
-        });
-
-      function drawWaypoints() {
-        wMarkers.forEach((m) => map.removeLayer(m));
-        wMarkers = [];
-        if (!plan) return;
-        const latlngs = [];
-        plan.waypoints.forEach((w, i) => {
-          const m = L.circle([w.lat, w.lng], {
-            radius: plan.radius,
-            weight: 1,
-            fillOpacity: 0.08,
-          });
-          m.addTo(map).bindTooltip(`#${i + 1}`);
-          wMarkers.push(m);
-          latlngs.push([w.lat, w.lng]);
-        });
-        if (routeLine) {
-          map.removeLayer(routeLine);
         }
-        if (latlngs.length > 1)
-          routeLine = L.polyline(latlngs, { dashArray: "4 6" }).addTo(map);
-        if (latlngs.length)
-          map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30] });
-      }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i data-lucide="map-pinned" class="text-sky-500 mr-2"></i>
+                    <span class="text-xl font-semibold text-gray-800">TravelPlanner</span>
+                </div>
+                <div class="flex space-x-8">
+                    <a href="#" id="planner-tab" class="tab-active inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <i data-lucide="map" class="mr-1"></i> Planner
+                    </a>
+                    <a href="#" id="tracker-tab" class="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700">
+                        <i data-lucide="compass" class="mr-1"></i> Tracker
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
 
-      function updateProgress() {
-        const tot = plan ? plan.waypoints.length : 0;
-        document.getElementById(
-          "progress"
-        ).textContent = `${visitedIdx}/${tot}`;
-      }
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Map Section -->
+            <div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h2 class="text-lg font-medium text-gray-800 flex items-center">
+                        <i data-lucide="map" class="mr-2 text-sky-500"></i> Interactive Map
+                    </h2>
+                    <button id="toggle-sidebar" class="p-2 rounded-full hover:bg-gray-100">
+                        <i data-lucide="panel-left"></i>
+                    </button>
+                </div>
+                <div id="map" class="w-full"></div>
+            </div>
 
-      function haversine(a, b) {
-        const R = 6371000;
-        const toRad = (x) => (x * Math.PI) / 180;
-        const dLat = toRad(b.lat - a.lat),
-          dLon = toRad(b.lng - a.lng);
-        const lat1 = toRad(a.lat),
-          lat2 = toRad(b.lat);
-        const h =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-        return 2 * R * Math.asin(Math.sqrt(h));
-      }
+            <!-- Sidebar (Destinations) -->
+            <div id="sidebar" class="w-80 bg-white rounded-lg shadow-sm sidebar">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h2 class="text-lg font-medium text-gray-800 flex items-center">
+                        <i data-lucide="list-checks" class="mr-2 text-sky-500"></i> Destinations
+                    </h2>
+                    <span id="destination-count" class="bg-sky-100 text-sky-800 text-xs font-medium px-2.5 py-0.5 rounded-full">0</span>
+                </div>
+                <div class="p-4">
+                    <div id="destination-list" class="space-y-3">
+                        <!-- Destinations will be added here dynamically -->
+                        <div class="text-center py-8 text-gray-400" id="empty-state">
+                            <i data-lucide="map-pin" class="mx-auto h-8 w-8 mb-2"></i>
+                            <p>No destinations added yet</p>
+                            <p class="text-sm">Click on the map to add your first destination</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 border-t flex justify-between">
+                    <button id="clear-all" class="text-red-500 hover:text-red-700 text-sm flex items-center">
+                        <i data-lucide="trash-2" class="mr-1"></i> Clear All
+                    </button>
+                    <button id="save-plan" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-md text-sm flex items-center">
+                        <i data-lucide="save" class="mr-1"></i> Save Plan
+                    </button>
+                </div>
+            </div>
+        </div>
 
-      function onPosition(pos) {
-        const { latitude, longitude } = pos.coords;
-        const latlng = [latitude, longitude];
-        const now = new Date().toISOString();
-        track.push({ lat: latitude, lng: longitude, ts: now });
+        <!-- Add Destination Form -->
+        <div class="mt-6 bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="p-4 border-b">
+                <h2 class="text-lg font-medium text-gray-800 flex items-center">
+                    <i data-lucide="plus-circle" class="mr-2 text-sky-500"></i> Add Destination
+                </h2>
+            </div>
+            <div class="p-4">
+                <form id="destination-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                        <input type="text" id="name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label for="lat" class="block text-sm font-medium text-gray-700 mb-1">Latitude</label>
+                        <input type="number" step="any" id="lat" name="lat" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label for="lng" class="block text-sm font-medium text-gray-700 mb-1">Longitude</label>
+                        <input type="number" step="any" id="lng" name="lng" required class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500">
+                    </div>
+                    <div class="md:col-span-3 flex justify-end space-x-3">
+                        <button type="button" id="get-location" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                            <i data-lucide="locate-fixed" class="mr-2"></i> Use Current Location
+                        </button>
+                        <button type="button" id="clear-form" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                            <i data-lucide="x" class="mr-2"></i> Clear
+                        </button>
+                        <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-sky-500 hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                            <i data-lucide="plus" class="mr-2"></i> Add Destination
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
 
-        if (!youMarker) {
-          youMarker = L.marker(latlng)
-            .addTo(map)
-            .bindTooltip("Anda", { permanent: true, direction: "top" });
-        } else youMarker.setLatLng(latlng);
+    <!-- Export Modal -->
+    <div id="export-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Export Plan</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-500">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="mb-4">
+                <label for="export-format" class="block text-sm font-medium text-gray-700 mb-1">Format</label>
+                <select id="export-format" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500">
+                    <option value="json">JSON</option>
+                    <option value="text">Text</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="export-data" class="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                <textarea id="export-data" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 font-mono text-sm"></textarea>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="copy-data" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                    <i data-lucide="copy" class="mr-2"></i> Copy
+                </button>
+                <button id="download-data" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-sky-500 hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500">
+                    <i data-lucide="download" class="mr-2"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
 
-        // Draw path
-        const ll = track.map((p) => [p.lat, p.lng]);
-        if (routeLine) {
-          /* keep plan line */
-        }
-        if (window.pathLine) {
-          map.removeLayer(window.pathLine);
-        }
-        window.pathLine = L.polyline(ll, { weight: 4 }).addTo(map);
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
 
-        // Check waypoint hit (in order)
-        if (plan && visitedIdx < plan.waypoints.length) {
-          const target = plan.waypoints[visitedIdx];
-          const d = haversine(
-            { lat: latitude, lng: longitude },
-            { lat: target.lat, lng: target.lng }
-          );
-          if (d <= plan.radius) {
-            visitedIdx++;
-            updateProgress();
-            document.getElementById(
-              "status"
-            ).textContent = `✅ Titik #${visitedIdx} tercapai`;
-            if (visitedIdx === plan.waypoints.length) {
-              document.getElementById("status").textContent =
-                "🎉 Semua titik tercapai. Ekspor hasil.";
-              document.getElementById("exportJourney").disabled = false;
+        // Map initialization
+        let map = L.map('map').setView([51.505, -0.09], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Variables to store markers and destinations
+        let markers = [];
+        let destinations = [];
+        let editIndex = -1;
+
+        // Load saved destinations from localStorage
+        function loadDestinations() {
+            const saved = localStorage.getItem('travelPlan');
+            if (saved) {
+                destinations = JSON.parse(saved);
+                updateDestinationList();
+                updateMapMarkers();
             }
-          } else {
-            document.getElementById(
-              "status"
-            ).textContent = `Berjalan… jarak ke target: ${Math.round(d)}m`;
-          }
         }
-      }
 
-      function onError(err) {
-        document.getElementById("status").textContent =
-          "GPS error: " + err.message;
-      }
+        // Save destinations to localStorage
+        function saveDestinations() {
+            localStorage.setItem('travelPlan', JSON.stringify(destinations));
+        }
 
-      document.getElementById("startBtn").onclick = () => {
-        if (!plan) {
-          alert("Muat rencana (sales-plan.json) terlebih dahulu");
-          return;
+        // Update the destination list in the sidebar
+        function updateDestinationList() {
+            const list = document.getElementById('destination-list');
+            const emptyState = document.getElementById('empty-state');
+            
+            if (destinations.length === 0) {
+                emptyState.classList.remove('hidden');
+                list.innerHTML = '';
+                document.getElementById('destination-count').textContent = '0';
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            list.innerHTML = '';
+            
+            destinations.forEach((dest, index) => {
+                const item = document.createElement('div');
+                item.className = 'destination-item p-3 border rounded-md hover:shadow-sm cursor-pointer';
+                item.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-medium text-gray-800">${dest.name}</h3>
+                            <p class="text-xs text-gray-500 mt-1">Lat: ${dest.lat.toFixed(4)}, Lng: ${dest.lng.toFixed(4)}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button class="edit-btn p-1 text-gray-400 hover:text-sky-500" data-index="${index}">
+                                <i data-lucide="pencil" class="w-4 h-4"></i>
+                            </button>
+                            <button class="delete-btn p-1 text-gray-400 hover:text-red-500" data-index="${index}">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-2 flex items-center text-xs text-gray-500">
+                        <i data-lucide="list-ordered" class="mr-1 w-3 h-3"></i>
+                        <span>Order: ${index + 1}</span>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+            
+            document.getElementById('destination-count').textContent = destinations.length;
+            
+            // Add event listeners to edit and delete buttons
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.getAttribute('data-index'));
+                    editDestination(index);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const index = parseInt(btn.getAttribute('data-index'));
+                    deleteDestination(index);
+                });
+            });
+            
+            // Refresh Lucide icons
+            lucide.createIcons();
         }
-        if (watchId) return;
-        track = [];
-        visitedIdx = 0;
-        updateProgress();
-        if (!navigator.geolocation) {
-          alert("Geolocation tidak didukung");
-          return;
+
+        // Update markers on the map
+        function updateMapMarkers() {
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            
+            // Add new markers
+            destinations.forEach((dest, index) => {
+                const marker = L.marker([dest.lat, dest.lng]).addTo(map)
+                    .bindPopup(`<b>${dest.name}</b><br>Order: ${index + 1}`);
+                markers.push(marker);
+            });
+            
+            // Fit map to show all markers if there are any
+            if (destinations.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.2));
+            }
         }
-        document.getElementById("status").textContent = "Memulai…";
-        watchId = navigator.geolocation.watchPosition(onPosition, onError, {
-          enableHighAccuracy: true,
-          maximumAge: 1000,
-          timeout: 20000,
+
+        // Add a new destination
+        function addDestination(name, lat, lng) {
+            destinations.push({ name, lat, lng });
+            updateDestinationList();
+            updateMapMarkers();
+            saveDestinations();
+        }
+
+        // Edit an existing destination
+        function editDestination(index) {
+            if (index >= 0 && index < destinations.length) {
+                const dest = destinations[index];
+                document.getElementById('name').value = dest.name;
+                document.getElementById('lat').value = dest.lat;
+                document.getElementById('lng').value = dest.lng;
+                editIndex = index;
+                
+                // Change button text
+                const submitBtn = document.querySelector('#destination-form button[type="submit"]');
+                submitBtn.innerHTML = '<i data-lucide="save" class="mr-2"></i> Update Destination';
+                
+                // Scroll to form
+                document.getElementById('destination-form').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        // Delete a destination
+        function deleteDestination(index) {
+            if (confirm('Are you sure you want to delete this destination?')) {
+                destinations.splice(index, 1);
+                updateDestinationList();
+                updateMapMarkers();
+                saveDestinations();
+            }
+        }
+
+        // Clear all destinations
+        function clearAllDestinations() {
+            if (confirm('Are you sure you want to delete all destinations?')) {
+                destinations = [];
+                updateDestinationList();
+                updateMapMarkers();
+                saveDestinations();
+            }
+        }
+
+        // Export destinations
+        function exportDestinations(format) {
+            let exportData;
+            
+            if (format === 'json') {
+                exportData = JSON.stringify(destinations, null, 2);
+            } else {
+                exportData = destinations.map((dest, index) => 
+                    `${index + 1}. ${dest.name}\n   Latitude: ${dest.lat}\n   Longitude: ${dest.lng}`
+                ).join('\n\n');
+            }
+            
+            document.getElementById('export-data').value = exportData;
+            document.getElementById('export-modal').classList.remove('hidden');
+        }
+
+        // Download exported data
+        function downloadData() {
+            const format = document.getElementById('export-format').value;
+            const data = document.getElementById('export-data').value;
+            const blob = new Blob([data], { type: format === 'json' ? 'application/json' : 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `travel-plan.${format}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Event Listeners
+        document.getElementById('destination-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value;
+            const lat = parseFloat(document.getElementById('lat').value);
+            const lng = parseFloat(document.getElementById('lng').value);
+            
+            if (editIndex >= 0) {
+                // Update existing destination
+                destinations[editIndex] = { name, lat, lng };
+                editIndex = -1;
+                
+                // Reset button text
+                const submitBtn = document.querySelector('#destination-form button[type="submit"]');
+                submitBtn.innerHTML = '<i data-lucide="plus" class="mr-2"></i> Add Destination';
+            } else {
+                // Add new destination
+                addDestination(name, lat, lng);
+            }
+            
+            // Reset form
+            e.target.reset();
+            updateDestinationList();
+            updateMapMarkers();
+            saveDestinations();
         });
-        document.getElementById("stopBtn").disabled = false;
-      };
 
-      document.getElementById("stopBtn").onclick = () => {
-        if (watchId) {
-          navigator.geolocation.clearWatch(watchId);
-          watchId = null;
-          document.getElementById("status").textContent = "Dihentikan";
-        }
-      };
-
-      // Export journey
-      function download(filename, obj) {
-        const url = URL.createObjectURL(
-          new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" })
-        );
-        const a = Object.assign(document.createElement("a"), {
-          href: url,
-          download: filename,
+        document.getElementById('clear-form').addEventListener('click', () => {
+            document.getElementById('destination-form').reset();
+            editIndex = -1;
+            
+            // Reset button text
+            const submitBtn = document.querySelector('#destination-form button[type="submit"]');
+            submitBtn.innerHTML = '<i data-lucide="plus" class="mr-2"></i> Add Destination';
         });
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      }
 
-      document.getElementById("exportJourney").onclick = () => {
-        const data = {
-          type: "sales-journey",
-          version: 1,
-          exportedAt: new Date().toISOString(),
-          track,
-        };
-        download("sales-journey.json", data);
-      };
+        document.getElementById('get-location').addEventListener('click', () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    document.getElementById('lat').value = position.coords.latitude;
+                    document.getElementById('lng').value = position.coords.longitude;
+                    document.getElementById('name').focus();
+                }, error => {
+                    alert('Unable to retrieve your location: ' + error.message);
+                });
+            } else {
+                alert('Geolocation is not supported by your browser');
+            }
+        });
+
+        document.getElementById('save-plan').addEventListener('click', () => {
+            exportDestinations('json');
+        });
+
+        document.getElementById('clear-all').addEventListener('click', clearAllDestinations);
+
+        document.getElementById('close-modal').addEventListener('click', () => {
+            document.getElementById('export-modal').classList.add('hidden');
+        });
+
+        document.getElementById('copy-data').addEventListener('click', () => {
+            const data = document.getElementById('export-data');
+            data.select();
+            document.execCommand('copy');
+            alert('Copied to clipboard!');
+        });
+
+        document.getElementById('download-data').addEventListener('click', downloadData);
+
+        document.getElementById('export-format').addEventListener('change', (e) => {
+            exportDestinations(e.target.value);
+        });
+
+        document.getElementById('toggle-sidebar').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+            const icon = document.querySelector('#toggle-sidebar i');
+            if (document.getElementById('sidebar').classList.contains('collapsed')) {
+                icon.setAttribute('data-lucide', 'panel-right');
+            } else {
+                icon.setAttribute('data-lucide', 'panel-left');
+            }
+            lucide.createIcons();
+        });
+
+        // Map click event to add new destinations
+        map.on('click', (e) => {
+            document.getElementById('lat').value = e.latlng.lat;
+            document.getElementById('lng').value = e.latlng.lng;
+            document.getElementById('name').focus();
+        });
+
+        // Tab switching
+        document.getElementById('planner-tab').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('planner-tab').classList.add('tab-active');
+            document.getElementById('tracker-tab').classList.remove('tab-active');
+        });
+
+        document.getElementById('tracker-tab').addEventListener('click', (e) => {
+            e.preventDefault();
+            alert('Tracker feature coming soon!');
+            document.getElementById('tracker-tab').classList.add('tab-active');
+            document.getElementById('planner-tab').classList.remove('tab-active');
+        });
+
+        // Initialize the app
+        loadDestinations();
     </script>
-  </body>
+</body>
 </html>
