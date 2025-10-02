@@ -1,17 +1,4 @@
-# Sales Route Planner & Tracker (Leaflet + HTML/JS)
 
-Dua halaman statis untuk uji coba tanpa backend/Django/QGIS:
-
-* `planner.html` — pilih/atur titik rute di desktop, ekspor rencana, unggah hasil perjalanan, dan verifikasi.
-* `tracker.html` — dibuka dari HP; aktifkan GPS, rekam jejak, centang titik yang sudah dikunjungi otomatis, ekspor hasil.
-
-> **Stack:** HTML + CSS + JS murni, Leaflet (CDN), OSM tiles. Aman di GitHub Pages (HTTPS) sehingga Geolocation API berfungsi.
-
----
-
-## File: `planner.html`
-
-```html
 <!doctype html>
 <html lang="id">
 <head>
@@ -437,20 +424,3 @@ document.getElementById('exportJourney').onclick = ()=>{
 </script>
 </body>
 </html>
-```
-
----
-
-## Cara pakai cepat
-
-1. Unggah dua file ini (`planner.html` dan `tracker.html`) ke repo GitHub dan aktifkan GitHub Pages.
-2. Buka `planner.html` di desktop/laptop.
-
-   * Klik peta untuk menambah titik berurutan.
-   * Atur **Radius** (default 50 m). Simpan dengan **Ekspor Rencana**.
-3. Buka `tracker.html` dari HP (URL GitHub Pages, pastikan HTTPS).
-
-   * Muat file rencana dari langkah 2.
-   * Tekan **Mulai Tracking** dan izinkan akses lokasi. Jalan sesuai urutan titik.
-   * Saat semua titik tercapai, **Ekspor Hasil Perjalanan** (JSON).
-4. Kembali ke `planner.html` → **Verifikasi hasil perjalanan** → unggah file dari HP untuk cek kecocokan (urutan & radius).
