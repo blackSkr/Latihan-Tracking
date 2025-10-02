@@ -1,165 +1,231 @@
 <!doctype html>
 <html lang="id">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Planner – Sales Route</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <style>
-    :root { --bg:#0b1220; --fg:#eaf0ff; --muted:#95a3b3; --accent:#5eead4; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--fg); }
-    header { padding:12px 16px; border-bottom:1px solid #1b2233; display:flex; gap:12px; align-items:center; }
-    h1 { font-size:18px; margin:0; }
-    .container { display:grid; grid-template-columns: 320px 1fr; height: calc(100vh - 56px); }
-    #sidebar { border-right:1px solid #1b2233; padding:12px; overflow:auto; }
-    #map { height: 100%; width: 100%; }
-    button, input[type="number"] { background:#121a2a; color:var(--fg); border:1px solid #28324a; padding:8px 10px; border-radius:10px; cursor:pointer; }
-    button:hover { border-color:#34405c; }
-    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
-    .list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
-    .wp { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#0f1729; border:1px solid #1e2740; border-radius:12px; padding:8px; }
-    .wp small { color:var(--muted); }
-    .drag { cursor:grab; user-select:none; opacity:.8; }
-    .pill { display:inline-block; padding:2px 8px; border:1px dashed #334; border-radius:999px; color:var(--muted); }
-    .danger { border-color:#6b2737; color:#ffb3c1; }
-    details { border:1px solid #1e2740; border-radius:12px; padding:8px; }
-    summary { cursor:pointer; color:var(--accent); }
-    a { color: var(--accent); }
-    .sep { height:1px; background:#162036; margin:12px 0; }
-  </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Planner – Sales Route</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    :root { --bg:#0b1220; --fg:#eaf0ff; --muted:#95a3b3; --accent:#5eead4; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--fg); }
+    header { padding:12px 16px; border-bottom:1px solid #1b2233; display:flex; gap:12px; align-items:center; }
+    h1 { font-size:18px; margin:0; }
+    .container { display:grid; grid-template-columns: 320px 1fr; height: calc(100vh - 56px); }
+    #sidebar { border-right:1px solid #1b2233; padding:12px; overflow:auto; }
+    #map { height: 100%; width: 100%; }
+    button, input[type="number"], input[type="text"], select { background:#121a2a; color:var(--fg); border:1px solid #28324a; padding:8px 10px; border-radius:10px; cursor:pointer; }
+    button:hover { border-color:#34405c; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+    .list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+    .wp { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#0f1729; border:1px solid #1e2740; border-radius:12px; padding:8px; }
+    .wp small { color:var(--muted); }
+    .drag { cursor:grab; user-select:none; opacity:.8; }
+    .pill { display:inline-block; padding:2px 8px; border:1px dashed #334; border-radius:999px; color:var(--muted); }
+    .danger { border-color:#6b2737; color:#ffb3c1; }
+    details { border:1px solid #1e2740; border-radius:12px; padding:8px; }
+    summary { cursor:pointer; color:var(--accent); }
+    a { color: var(--accent); }
+    .sep { height:1px; background:#162036; margin:12px 0; }
+  </style>
 </head>
 <body>
 <header>
-  <h1>🗺️ Planner – Sales Route</h1>
-  <span class="pill">Klik peta untuk tambah titik</span>
+  <h1>🗺️ Planner – Sales Route</h1>
+  <span class="pill">Klik peta untuk tambah titik</span>
 </header>
 <div class="container">
-  <aside id="sidebar">
-    <div class="row">
-      <label>Radius validasi (meter):</label>
-      <input id="radius" type="number" min="5" step="5" value="50"/>
-      <button id="clear">Hapus semua</button>
-    </div>
-    <div class="row">
-      <button id="exportPlan">💾 Ekspor Rencana (.json)</button>
-      <input id="filePlan" type="file" accept="application/json"/>
-      <button id="importPlan">📥 Impor Rencana</button>
-    </div>
-    <div class="sep"></div>
-    <h3>Rute / Titik</h3>
-    <div id="wpList" class="list"></div>
+  <aside id="sidebar">
+    <div class="row">
+      <label>Radius validasi (meter):</label>
+      <input id="radius" type="number" min="5" step="5" value="50"/>
+      <button id="clear">Hapus semua</button>
+    </div>
+    <div class="row">
+      <button id="exportPlan">💾 Ekspor Rencana (.json)</button>
+      <input id="filePlan" type="file" accept="application/json"/>
+      <button id="importPlan">📥 Impor Rencana</button>
+    </div>
+    <div class="sep"></div>
+    
+    <details open>
+      <summary>➕ **Tambah Lokasi Manual**</summary>
+      <div style="padding-top:8px;">
+        <label for="new_name" style="display:block; margin-bottom: 4px;">Nama Lokasi:</label>
+        <input type="text" id="new_name" placeholder="Kantor Klien A" required style="width:100%; margin-bottom:8px;"/>
 
-    <div class="sep"></div>
-    <details>
-      <summary>Verifikasi hasil perjalanan</summary>
-      <div class="row" style="margin-top:8px;">
-        <input id="journeyFile" type="file" accept="application/json"/>
-        <button id="verifyBtn">🔍 Verifikasi</button>
+        <label for="new_type" style="display:block; margin-bottom: 4px;">Jenis Kunjungan:</label>
+        <select id="new_type" style="width:100%; margin-bottom:8px;">
+          <option value="Kunjungan Sales">Kunjungan Sales</option>
+          <option value="Survei Lapangan">Survei Lapangan</option>
+          <option value="Meeting">Meeting</option>
+          <option value="Istirahat">Istirahat</option>
+          <option value="Lainnya">Lainnya</option>
+        </select>
+
+        <div class="row" style="flex-wrap:nowrap;">
+          <input type="number" step="any" id="new_lat" placeholder="Latitude" required style="flex-grow:1;"/>
+          <input type="number" step="any" id="new_lng" placeholder="Longitude" required style="flex-grow:1;"/>
+        </div>
+        <button id="addManual" style="margin-top:8px; width:100%;">Tambah ke Rute</button>
       </div>
-      <p id="verifyResult"></p>
     </details>
-
     <div class="sep"></div>
-    <p><small>Tips: drag & drop item untuk ubah urutan. Klik koordinat untuk fokus di peta.</small></p>
-  </aside>
-  <div id="map"></div>
+        <h3>Rute / Titik</h3>
+    <div id="wpList" class="list"></div>
+
+    <div class="sep"></div>
+    <details>
+      <summary>Verifikasi hasil perjalanan</summary>
+      <div class="row" style="margin-top:8px;">
+        <input id="journeyFile" type="file" accept="application/json"/>
+        <button id="verifyBtn">🔍 Verifikasi</button>
+      </div>
+      <p id="verifyResult"></p>
+    </details>
+
+    <div class="sep"></div>
+    <p><small>Tips: drag & drop item untuk ubah urutan. Klik koordinat untuk fokus di peta.</small></p>
+  </aside>
+  <div id="map"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 // --- State ---
-let waypoints = []; // {id, lat, lng}
-let markers = [];   // Leaflet markers
+// STRUKTUR DATA BARU: {id, lat, lng, name, type}
+let waypoints = []; 
+let markers = [];   
 let polyline = null;
 const map = L.map('map');
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
-map.setView([ -6.1754, 106.8272 ], 12); // Monas as default center
+map.setView([ -6.1754, 106.8272 ], 12); 
 
 // Restore plan from localStorage
 const saved = localStorage.getItem('sales_plan');
 if (saved) {
-  try { const obj = JSON.parse(saved); if (obj && Array.isArray(obj.waypoints)) { waypoints = obj.waypoints; document.getElementById('radius').value = obj.radius||50; } } catch(e){}
+  try { 
+    const obj = JSON.parse(saved); 
+    if (obj && Array.isArray(obj.waypoints)) { 
+        waypoints = obj.waypoints; 
+        document.getElementById('radius').value = obj.radius || 50; 
+    } 
+  } catch(e){}
 }
 
 function render() {
-  // Clear markers/polyline
-  markers.forEach(m => map.removeLayer(m)); markers = [];
-  if (polyline) { map.removeLayer(polyline); polyline = null; }
+  // Clear markers/polyline
+  markers.forEach(m => map.removeLayer(m)); markers = [];
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
 
-  // Draw markers and path
-  const latlngs = [];
-  waypoints.forEach((wp, idx) => {
-    const m = L.marker([wp.lat, wp.lng], { draggable: true }).addTo(map);
-    m.bindTooltip(`#${idx+1}`, {permanent:true, direction:'top'});
-    m.on('dragend', (e)=>{ const {lat, lng} = e.target.getLatLng(); wp.lat = lat; wp.lng = lng; persist(); renderList(); drawPath(); });
-    m.on('click', ()=>{ map.panTo([wp.lat, wp.lng]); });
-    markers.push(m);
-    latlngs.push([wp.lat, wp.lng]);
-  });
-  drawPath();
+  // Draw markers and path
+  waypoints.forEach((wp, idx) => {
+    const m = L.marker([wp.lat, wp.lng], { draggable: true }).addTo(map);
+    // Tampilkan Nama Lokasi di Tooltip
+    const tooltipText = wp.name ? `#${idx+1}: ${wp.name}` : `#${idx+1}`;
+    m.bindTooltip(tooltipText, {permanent:true, direction:'top'});
+
+    m.on('dragend', (e)=>{ 
+        const {lat, lng} = e.target.getLatLng(); 
+        wp.lat = lat; 
+        wp.lng = lng; 
+        // Nama dan Tipe tetap, hanya lat/lng yang diubah dari drag
+        persist(); 
+        renderList(); 
+        drawPath(); 
+    });
+    m.on('click', ()=>{ map.panTo([wp.lat, wp.lng]); });
+    markers.push(m);
+  });
+  drawPath();
 }
 
 function drawPath(){
-  if (polyline) { map.removeLayer(polyline); polyline = null; }
-  const latlngs = waypoints.map(w=>[w.lat,w.lng]);
-  if (latlngs.length>1) polyline = L.polyline(latlngs, { weight: 4 }).addTo(map);
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+  const latlngs = waypoints.map(w=>[w.lat,w.lng]);
+  if (latlngs.length>1) polyline = L.polyline(latlngs, { weight: 4 }).addTo(map);
 }
 
 function persist(){
-  const radius = Number(document.getElementById('radius').value)||50;
-  localStorage.setItem('sales_plan', JSON.stringify({ radius, waypoints }));
+  const radius = Number(document.getElementById('radius').value)||50;
+  localStorage.setItem('sales_plan', JSON.stringify({ radius, waypoints }));
 }
 
-function addWaypoint(latlng){
-  waypoints.push({ id:crypto.randomUUID(), lat:latlng.lat, lng:latlng.lng });
-  persist();
-  render();
-  renderList();
+// Fungsi addWaypoint diperbarui agar bisa menerima data lokasi lengkap dari form
+function addWaypoint({lat, lng, name='Titik Baru', type='Lainnya'}){
+  waypoints.push({ id:crypto.randomUUID(), lat, lng, name, type });
+  persist();
+  render();
+  renderList();
 }
 
-map.on('click', (e)=> addWaypoint(e.latlng));
+// Handler untuk klik peta (menggunakan data default)
+map.on('click', (e)=> addWaypoint({lat: e.latlng.lat, lng: e.latlng.lng, name:'Titik Peta Baru'}));
+
+// Handler untuk tombol "Tambah ke Rute" dari form manual
+document.getElementById('addManual').onclick = ()=>{
+    const name = document.getElementById('new_name').value.trim();
+    const type = document.getElementById('new_type').value;
+    const lat = Number(document.getElementById('new_lat').value);
+    const lng = Number(document.getElementById('new_lng').value);
+
+    if (!name) { alert('Nama Lokasi wajib diisi.'); return; }
+    if (isNaN(lat) || lat < -90 || lat > 90) { alert('Latitude tidak valid.'); return; }
+    if (isNaN(lng) || lng < -180 || lng > 180) { alert('Longitude tidak valid.'); return; }
+
+    addWaypoint({ lat, lng, name, type });
+    // Reset form
+    document.getElementById('new_name').value = '';
+    document.getElementById('new_lat').value = '';
+    document.getElementById('new_lng').value = '';
+    map.setView([lat, lng], 17); // Fokus ke lokasi baru
+};
+
 
 function renderList(){
-  const list = document.getElementById('wpList');
-  list.innerHTML = '';
-  waypoints.forEach((wp, idx)=>{
-    const div = document.createElement('div');
-    div.className = 'wp';
-    div.draggable = true;
-    div.innerHTML = `
-      <div>
-        <div><strong>#${idx+1}</strong> <small>(${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)})</small></div>
-        <div class="row">
-          <button data-act="focus">Fokus</button>
-          <button data-act="del" class="danger">Hapus</button>
+  const list = document.getElementById('wpList');
+  list.innerHTML = '';
+  waypoints.forEach((wp, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'wp';
+    div.draggable = true;
+    div.innerHTML = `
+      <div>
+        <div>
+            <strong>#${idx+1}: ${wp.name || 'Titik Tanpa Nama'}</strong> 
+            <span class="pill">${wp.type || 'N/A'}</span>
         </div>
-      </div>
-      <div class="drag">↕︎</div>
-    `;
-    div.querySelector('[data-act="focus"]').onclick = ()=>{ map.setView([wp.lat, wp.lng], 17); };
-    div.querySelector('[data-act="del"]').onclick = ()=>{ waypoints.splice(idx,1); persist(); render(); renderList(); };
+        <small>(${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)})</small>
+        <div class="row">
+          <button data-act="focus">Fokus</button>
+          <button data-act="del" class="danger">Hapus</button>
+        </div>
+      </div>
+      <div class="drag">↕︎</div>
+    `;
+    div.querySelector('[data-act="focus"]').onclick = ()=>{ map.setView([wp.lat, wp.lng], 17); };
+    div.querySelector('[data-act="del"]').onclick = ()=>{ waypoints.splice(idx,1); persist(); render(); renderList(); };
 
-    // Drag & drop reorder
-    div.addEventListener('dragstart', (ev)=>{ ev.dataTransfer.setData('text/plain', idx.toString()); });
-    div.addEventListener('dragover', (ev)=> ev.preventDefault());
-    div.addEventListener('drop', (ev)=>{
-      ev.preventDefault();
-      const from = Number(ev.dataTransfer.getData('text/plain'));
-      const to = idx;
-      if (from===to) return;
-      const [item] = waypoints.splice(from,1);
-      waypoints.splice(to,0,item);
-      persist();
-      render();
-      renderList();
-    });
+    // Drag & drop reorder
+    div.addEventListener('dragstart', (ev)=>{ ev.dataTransfer.setData('text/plain', idx.toString()); });
+    div.addEventListener('dragover', (ev)=> ev.preventDefault());
+    div.addEventListener('drop', (ev)=>{
+      ev.preventDefault();
+      const from = Number(ev.dataTransfer.getData('text/plain'));
+      const to = idx;
+      if (from===to) return;
+      const [item] = waypoints.splice(from,1);
+      waypoints.splice(to,0,item);
+      persist();
+      render();
+      renderList();
+    });
 
-    list.appendChild(div);
-  });
+    list.appendChild(div);
+  });
 }
 
 render();
@@ -173,69 +239,82 @@ document.getElementById('radius').onchange = ()=> persist();
 
 // Export/Import Plan
 function download(filename, obj){
-  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)], {type:'application/json'}));
-  const a = Object.assign(document.createElement('a'), { href:url, download:filename });
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)], {type:'application/json'}));
+  const a = Object.assign(document.createElement('a'), { href:url, download:filename });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
- document.getElementById('exportPlan').onclick = ()=>{
-  const radius = Number(document.getElementById('radius').value)||50;
-  const obj = { type:'sales-plan', version:1, createdAt:new Date().toISOString(), radius, waypoints };
-  download('sales-plan.json', obj);
- };
+ document.getElementById('exportPlan').onclick = ()=>{
+  const radius = Number(document.getElementById('radius').value)||50;
+  const obj = { type:'sales-plan', version:1, createdAt:new Date().toISOString(), radius, waypoints };
+  download('sales-plan.json', obj);
+ };
 
 document.getElementById('importPlan').onclick = ()=>{
-  const inp = document.getElementById('filePlan');
-  if (!inp.files[0]) { alert('Pilih file rencana .json'); return; }
-  const r = new FileReader();
-  r.onload = ()=>{
-    try { const obj = JSON.parse(r.result);
-      if (obj && obj.waypoints) { waypoints = obj.waypoints; document.getElementById('radius').value = obj.radius||50; persist(); render(); renderList(); }
-      else alert('Format tidak dikenali');
-    } catch(e){ alert('Gagal parse JSON'); }
-  };
-  r.readAsText(inp.files[0]);
+  const inp = document.getElementById('filePlan');
+  if (!inp.files[0]) { alert('Pilih file rencana .json'); return; }
+  const r = new FileReader();
+  r.onload = ()=>{
+    try { 
+        const obj = JSON.parse(r.result);
+        if (obj && obj.waypoints) { 
+            // Memastikan data yang diimpor tetap memiliki name/type (jika ada)
+            waypoints = obj.waypoints.map(wp => ({
+                id: wp.id || crypto.randomUUID(), 
+                lat: wp.lat, 
+                lng: wp.lng, 
+                name: wp.name || 'Titik Impor', // Menambahkan default jika tidak ada
+                type: wp.type || 'Lainnya'
+            }));
+            document.getElementById('radius').value = obj.radius||50; 
+            persist(); 
+            render(); 
+            renderList(); 
+        } else alert('Format tidak dikenali');
+    } catch(e){ alert('Gagal parse JSON'); }
+  };
+  r.readAsText(inp.files[0]);
 };
 
 // --- Verification ---
 function haversine(a,b){
-  const R=6371000; const toRad=x=>x*Math.PI/180;
-  const dLat = toRad(b.lat-a.lat), dLon = toRad(b.lng-a.lng);
-  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
-  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
-  return 2*R*Math.asin(Math.sqrt(h));
+  const R=6371000; const toRad=x=>x*Math.PI/180;
+  const dLat = toRad(b.lat-a.lat), dLon = toRad(b.lng-a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
 }
 
 function verifyJourney(plan, journey){
-  const radius = plan.radius || 50;
-  const points = (journey.track||[]);
-  let idx = 0; // waypoint index
-  const hits = [];
-  for (let i=0;i<points.length && idx<plan.waypoints.length;i++){
-    const p = points[i];
-    const w = plan.waypoints[idx];
-    const d = haversine({lat:p.lat,lng:p.lng},{lat:w.lat,lng:w.lng});
-    if (d <= radius) { hits.push({wpIndex: idx, atPoint: i, dist: d}); idx++; }
-  }
-  const ok = idx===plan.waypoints.length;
-  return { ok, hits, visited: idx, total: plan.waypoints.length };
+  const radius = plan.radius || 50;
+  const points = (journey.track||[]);
+  let idx = 0; // waypoint index
+  const hits = [];
+  for (let i=0;i<points.length && idx<plan.waypoints.length;i++){
+    const p = points[i];
+    const w = plan.waypoints[idx];
+    const d = haversine({lat:p.lat,lng:p.lng},{lat:w.lat,lng:w.lng});
+    if (d <= radius) { hits.push({wpIndex: idx, atPoint: i, dist: d}); idx++; }
+  }
+  const ok = idx===plan.waypoints.length;
+  return { ok, hits, visited: idx, total: plan.waypoints.length };
 }
 
- document.getElementById('verifyBtn').onclick = ()=>{
-  const jf = document.getElementById('journeyFile');
-  if (!jf.files[0]) { alert('Unggah file hasil perjalanan (JSON) dari tracker'); return; }
-  const r = new FileReader();
-  r.onload = ()=>{
-    try {
-      const journey = JSON.parse(r.result);
-      const plan = { radius: Number(document.getElementById('radius').value)||50, waypoints };
-      const res = verifyJourney(plan, journey);
-      const msg = res.ok ? `✅ Cocok: ${res.visited}/${res.total} titik tercapai berurutan.` : `❌ Belum cocok: ${res.visited}/${res.total} titik yang terdeteksi berurutan.`;
-      document.getElementById('verifyResult').textContent = msg;
-    } catch(e){ alert('Format hasil perjalanan tidak valid'); }
-  };
-  r.readAsText(jf.files[0]);
- };
+ document.getElementById('verifyBtn').onclick = ()=>{
+  const jf = document.getElementById('journeyFile');
+  if (!jf.files[0]) { alert('Unggah file hasil perjalanan (JSON) dari tracker'); return; }
+  const r = new FileReader();
+  r.onload = ()=>{
+    try {
+      const journey = JSON.parse(r.result);
+      const plan = { radius: Number(document.getElementById('radius').value)||50, waypoints };
+      const res = verifyJourney(plan, journey);
+      const msg = res.ok ? `✅ Cocok: ${res.visited}/${res.total} titik tercapai berurutan.` : `❌ Belum cocok: ${res.visited}/${res.total} titik yang terdeteksi berurutan.`;
+      document.getElementById('verifyResult').textContent = msg;
+    } catch(e){ alert('Format hasil perjalanan tidak valid'); }
+  };
+  r.readAsText(jf.files[0]);
+ };
 </script>
 </body>
 </html>
