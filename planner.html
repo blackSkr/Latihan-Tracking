@@ -176,12 +176,14 @@
 //         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 //             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 //         }).addTo(map);
+        const map = L.map('map').setView([-0.5021, 117.1536], 13);
+
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-map.setView([-6.1754,106.8272], 15);
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
 
         // Variables to store markers and destinations
         let markers = [];
