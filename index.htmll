@@ -1,0 +1,44 @@
+# Sales Route Planner & Tracker (Leaflet + HTML/JS)
+
+Tambahan file utama `index.html` sebagai landing page untuk memilih ke halaman **Planner** atau **Tracker**.
+
+---
+
+## File: `index.html`
+
+```html
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Sales Route Platform</title>
+  <style>
+    :root { --bg:#0b1220; --fg:#eaf0ff; --muted:#95a3b3; --accent:#5eead4; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; background:var(--bg); color:var(--fg); display:flex; align-items:center; justify-content:center; height:100vh; }
+    main { text-align:center; max-width:480px; padding:24px; }
+    h1 { font-size:22px; margin-bottom:16px; }
+    p { color:var(--muted); margin-bottom:24px; }
+    a.button { display:block; margin:12px 0; padding:14px 20px; background:#121a2a; border:1px solid #28324a; border-radius:12px; color:var(--fg); text-decoration:none; font-size:16px; font-weight:600; transition:all .2s; }
+    a.button:hover { border-color:#34405c; background:#1a2439; }
+    footer { margin-top:32px; font-size:13px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🚀 Sales Route Platform</h1>
+    <p>Pilih mode sesuai kebutuhan:</p>
+    <a href="planner.html" class="button">🗺️ Planner (desktop)</a>
+    <a href="tracker.html" class="button">📍 Tracker (HP)</a>
+    <footer>
+      <p>&copy; 2025 – Demo Sales Route Planner & Tracker</p>
+    </footer>
+  </main>
+</body>
+</html>
+```
+
+---
+
+Dengan `index.html` ini, GitHub Pages kamu akan langsung tampilkan landing page sederhana untuk masuk ke **Planner** atau **Tracker**.
