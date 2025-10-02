@@ -1,0 +1,456 @@
+# Sales Route Planner & Tracker (Leaflet + HTML/JS)
+
+Dua halaman statis untuk uji coba tanpa backend/Django/QGIS:
+
+* `planner.html` — pilih/atur titik rute di desktop, ekspor rencana, unggah hasil perjalanan, dan verifikasi.
+* `tracker.html` — dibuka dari HP; aktifkan GPS, rekam jejak, centang titik yang sudah dikunjungi otomatis, ekspor hasil.
+
+> **Stack:** HTML + CSS + JS murni, Leaflet (CDN), OSM tiles. Aman di GitHub Pages (HTTPS) sehingga Geolocation API berfungsi.
+
+---
+
+## File: `planner.html`
+
+```html
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Planner – Sales Route</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    :root { --bg:#0b1220; --fg:#eaf0ff; --muted:#95a3b3; --accent:#5eead4; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--fg); }
+    header { padding:12px 16px; border-bottom:1px solid #1b2233; display:flex; gap:12px; align-items:center; }
+    h1 { font-size:18px; margin:0; }
+    .container { display:grid; grid-template-columns: 320px 1fr; height: calc(100vh - 56px); }
+    #sidebar { border-right:1px solid #1b2233; padding:12px; overflow:auto; }
+    #map { height: 100%; width: 100%; }
+    button, input[type="number"] { background:#121a2a; color:var(--fg); border:1px solid #28324a; padding:8px 10px; border-radius:10px; cursor:pointer; }
+    button:hover { border-color:#34405c; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+    .list { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+    .wp { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#0f1729; border:1px solid #1e2740; border-radius:12px; padding:8px; }
+    .wp small { color:var(--muted); }
+    .drag { cursor:grab; user-select:none; opacity:.8; }
+    .pill { display:inline-block; padding:2px 8px; border:1px dashed #334; border-radius:999px; color:var(--muted); }
+    .danger { border-color:#6b2737; color:#ffb3c1; }
+    details { border:1px solid #1e2740; border-radius:12px; padding:8px; }
+    summary { cursor:pointer; color:var(--accent); }
+    a { color: var(--accent); }
+    .sep { height:1px; background:#162036; margin:12px 0; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🗺️ Planner – Sales Route</h1>
+  <span class="pill">Klik peta untuk tambah titik</span>
+</header>
+<div class="container">
+  <aside id="sidebar">
+    <div class="row">
+      <label>Radius validasi (meter):</label>
+      <input id="radius" type="number" min="5" step="5" value="50"/>
+      <button id="clear">Hapus semua</button>
+    </div>
+    <div class="row">
+      <button id="exportPlan">💾 Ekspor Rencana (.json)</button>
+      <input id="filePlan" type="file" accept="application/json"/>
+      <button id="importPlan">📥 Impor Rencana</button>
+    </div>
+    <div class="sep"></div>
+    <h3>Rute / Titik</h3>
+    <div id="wpList" class="list"></div>
+
+    <div class="sep"></div>
+    <details>
+      <summary>Verifikasi hasil perjalanan</summary>
+      <div class="row" style="margin-top:8px;">
+        <input id="journeyFile" type="file" accept="application/json"/>
+        <button id="verifyBtn">🔍 Verifikasi</button>
+      </div>
+      <p id="verifyResult"></p>
+    </details>
+
+    <div class="sep"></div>
+    <p><small>Tips: drag & drop item untuk ubah urutan. Klik koordinat untuk fokus di peta.</small></p>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+// --- State ---
+let waypoints = []; // {id, lat, lng}
+let markers = [];   // Leaflet markers
+let polyline = null;
+const map = L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+map.setView([ -6.1754, 106.8272 ], 12); // Monas as default center
+
+// Restore plan from localStorage
+const saved = localStorage.getItem('sales_plan');
+if (saved) {
+  try { const obj = JSON.parse(saved); if (obj && Array.isArray(obj.waypoints)) { waypoints = obj.waypoints; document.getElementById('radius').value = obj.radius||50; } } catch(e){}
+}
+
+function render() {
+  // Clear markers/polyline
+  markers.forEach(m => map.removeLayer(m)); markers = [];
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+
+  // Draw markers and path
+  const latlngs = [];
+  waypoints.forEach((wp, idx) => {
+    const m = L.marker([wp.lat, wp.lng], { draggable: true }).addTo(map);
+    m.bindTooltip(`#${idx+1}`, {permanent:true, direction:'top'});
+    m.on('dragend', (e)=>{ const {lat, lng} = e.target.getLatLng(); wp.lat = lat; wp.lng = lng; persist(); renderList(); drawPath(); });
+    m.on('click', ()=>{ map.panTo([wp.lat, wp.lng]); });
+    markers.push(m);
+    latlngs.push([wp.lat, wp.lng]);
+  });
+  drawPath();
+}
+
+function drawPath(){
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+  const latlngs = waypoints.map(w=>[w.lat,w.lng]);
+  if (latlngs.length>1) polyline = L.polyline(latlngs, { weight: 4 }).addTo(map);
+}
+
+function persist(){
+  const radius = Number(document.getElementById('radius').value)||50;
+  localStorage.setItem('sales_plan', JSON.stringify({ radius, waypoints }));
+}
+
+function addWaypoint(latlng){
+  waypoints.push({ id:crypto.randomUUID(), lat:latlng.lat, lng:latlng.lng });
+  persist();
+  render();
+  renderList();
+}
+
+map.on('click', (e)=> addWaypoint(e.latlng));
+
+function renderList(){
+  const list = document.getElementById('wpList');
+  list.innerHTML = '';
+  waypoints.forEach((wp, idx)=>{
+    const div = document.createElement('div');
+    div.className = 'wp';
+    div.draggable = true;
+    div.innerHTML = `
+      <div>
+        <div><strong>#${idx+1}</strong> <small>(${wp.lat.toFixed(6)}, ${wp.lng.toFixed(6)})</small></div>
+        <div class="row">
+          <button data-act="focus">Fokus</button>
+          <button data-act="del" class="danger">Hapus</button>
+        </div>
+      </div>
+      <div class="drag">↕︎</div>
+    `;
+    div.querySelector('[data-act="focus"]').onclick = ()=>{ map.setView([wp.lat, wp.lng], 17); };
+    div.querySelector('[data-act="del"]').onclick = ()=>{ waypoints.splice(idx,1); persist(); render(); renderList(); };
+
+    // Drag & drop reorder
+    div.addEventListener('dragstart', (ev)=>{ ev.dataTransfer.setData('text/plain', idx.toString()); });
+    div.addEventListener('dragover', (ev)=> ev.preventDefault());
+    div.addEventListener('drop', (ev)=>{
+      ev.preventDefault();
+      const from = Number(ev.dataTransfer.getData('text/plain'));
+      const to = idx;
+      if (from===to) return;
+      const [item] = waypoints.splice(from,1);
+      waypoints.splice(to,0,item);
+      persist();
+      render();
+      renderList();
+    });
+
+    list.appendChild(div);
+  });
+}
+
+render();
+renderList();
+
+// Controls
+
+document.getElementById('clear').onclick = ()=>{ if(confirm('Hapus semua titik?')) { waypoints = []; persist(); render(); renderList(); } };
+
+document.getElementById('radius').onchange = ()=> persist();
+
+// Export/Import Plan
+function download(filename, obj){
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)], {type:'application/json'}));
+  const a = Object.assign(document.createElement('a'), { href:url, download:filename });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+ document.getElementById('exportPlan').onclick = ()=>{
+  const radius = Number(document.getElementById('radius').value)||50;
+  const obj = { type:'sales-plan', version:1, createdAt:new Date().toISOString(), radius, waypoints };
+  download('sales-plan.json', obj);
+ };
+
+document.getElementById('importPlan').onclick = ()=>{
+  const inp = document.getElementById('filePlan');
+  if (!inp.files[0]) { alert('Pilih file rencana .json'); return; }
+  const r = new FileReader();
+  r.onload = ()=>{
+    try { const obj = JSON.parse(r.result);
+      if (obj && obj.waypoints) { waypoints = obj.waypoints; document.getElementById('radius').value = obj.radius||50; persist(); render(); renderList(); }
+      else alert('Format tidak dikenali');
+    } catch(e){ alert('Gagal parse JSON'); }
+  };
+  r.readAsText(inp.files[0]);
+};
+
+// --- Verification ---
+function haversine(a,b){
+  const R=6371000; const toRad=x=>x*Math.PI/180;
+  const dLat = toRad(b.lat-a.lat), dLon = toRad(b.lng-a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function verifyJourney(plan, journey){
+  const radius = plan.radius || 50;
+  const points = (journey.track||[]);
+  let idx = 0; // waypoint index
+  const hits = [];
+  for (let i=0;i<points.length && idx<plan.waypoints.length;i++){
+    const p = points[i];
+    const w = plan.waypoints[idx];
+    const d = haversine({lat:p.lat,lng:p.lng},{lat:w.lat,lng:w.lng});
+    if (d <= radius) { hits.push({wpIndex: idx, atPoint: i, dist: d}); idx++; }
+  }
+  const ok = idx===plan.waypoints.length;
+  return { ok, hits, visited: idx, total: plan.waypoints.length };
+}
+
+ document.getElementById('verifyBtn').onclick = ()=>{
+  const jf = document.getElementById('journeyFile');
+  if (!jf.files[0]) { alert('Unggah file hasil perjalanan (JSON) dari tracker'); return; }
+  const r = new FileReader();
+  r.onload = ()=>{
+    try {
+      const journey = JSON.parse(r.result);
+      const plan = { radius: Number(document.getElementById('radius').value)||50, waypoints };
+      const res = verifyJourney(plan, journey);
+      const msg = res.ok ? `✅ Cocok: ${res.visited}/${res.total} titik tercapai berurutan.` : `❌ Belum cocok: ${res.visited}/${res.total} titik yang terdeteksi berurutan.`;
+      document.getElementById('verifyResult').textContent = msg;
+    } catch(e){ alert('Format hasil perjalanan tidak valid'); }
+  };
+  r.readAsText(jf.files[0]);
+ };
+</script>
+</body>
+</html>
+```
+
+---
+
+## File: `tracker.html`
+
+```html
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Tracker – Sales Route</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    :root { --bg:#0b1220; --fg:#eaf0ff; --muted:#95a3b3; --accent:#5eead4; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--fg); }
+    header { padding:12px 16px; border-bottom:1px solid #1b2233; display:flex; gap:12px; align-items:center; justify-content:space-between; }
+    h1 { font-size:18px; margin:0; }
+    #map { height: calc(100vh - 170px); width: 100%; }
+    .panel { padding:12px 16px; display:grid; gap:8px; }
+    button, input[type="file"] { background:#121a2a; color:var(--fg); border:1px solid #28324a; padding:10px 12px; border-radius:12px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .pill { display:inline-block; padding:2px 8px; border:1px dashed #334; border-radius:999px; color:var(--muted); }
+    .ok { color:#34d399; }
+    .bad { color:#fca5a5; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>📍 Tracker – Sales Route</h1>
+  <span class="pill">Aktifkan GPS & izinkan lokasi</span>
+</header>
+<div class="panel">
+  <div class="grid">
+    <div>
+      <input id="planFile" type="file" accept="application/json"/>
+    </div>
+    <div>
+      <button id="startBtn">▶️ Mulai Tracking</button>
+      <button id="stopBtn" disabled>⏹️ Stop</button>
+    </div>
+  </div>
+  <div>
+    <span>Progress: </span><strong id="progress">0/0</strong>
+    <span id="status" class="pill">Idle</span>
+  </div>
+</div>
+<div id="map"></div>
+<div class="panel">
+  <button id="exportJourney" disabled>💾 Ekspor Hasil Perjalanan (.json)</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+let plan = null; // {radius, waypoints}
+let visitedIdx = 0;
+let track = []; // [{lat,lng,ts}]
+let watchId = null;
+let map = L.map('map');
+let youMarker = null;
+let routeLine = null;
+let wMarkers = [];
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+map.setView([-6.1754,106.8272], 15);
+
+function loadPlanFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = ()=>{ try { resolve(JSON.parse(r.result)); } catch(e){ reject(e); } };
+    r.onerror = reject;
+    r.readAsText(file);
+  });
+}
+
+document.getElementById('planFile').addEventListener('change', async (e)=>{
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const obj = await loadPlanFromFile(f);
+    if (obj.type==='sales-plan' || obj.waypoints){
+      plan = { radius: obj.radius||50, waypoints: obj.waypoints };
+      visitedIdx = 0; updateProgress(); drawWaypoints();
+      document.getElementById('status').textContent = `Plan dimuat (radius ${plan.radius}m)`;
+    } else alert('Format rencana tidak dikenali');
+  } catch(err){ alert('Gagal baca rencana: '+err.message); }
+});
+
+function drawWaypoints(){
+  wMarkers.forEach(m=>map.removeLayer(m)); wMarkers=[];
+  if (!plan) return;
+  const latlngs = [];
+  plan.waypoints.forEach((w,i)=>{
+    const m = L.circle([w.lat,w.lng], { radius: plan.radius, weight:1, fillOpacity:0.08 });
+    m.addTo(map).bindTooltip(`#${i+1}`);
+    wMarkers.push(m);
+    latlngs.push([w.lat,w.lng]);
+  });
+  if (routeLine) { map.removeLayer(routeLine); }
+  if (latlngs.length>1) routeLine = L.polyline(latlngs, { dashArray: '4 6' }).addTo(map);
+  if (latlngs.length) map.fitBounds(L.latLngBounds(latlngs), { padding: [30,30] });
+}
+
+function updateProgress(){
+  const tot = plan? plan.waypoints.length:0;
+  document.getElementById('progress').textContent = `${visitedIdx}/${tot}`;
+}
+
+function haversine(a,b){
+  const R=6371000; const toRad=x=>x*Math.PI/180;
+  const dLat = toRad(b.lat-a.lat), dLon = toRad(b.lng-a.lng);
+  const lat1 = toRad(a.lat), lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function onPosition(pos){
+  const { latitude, longitude } = pos.coords;
+  const latlng = [latitude, longitude];
+  const now = new Date().toISOString();
+  track.push({ lat: latitude, lng: longitude, ts: now });
+
+  if (!youMarker){ youMarker = L.marker(latlng).addTo(map).bindTooltip('Anda',{permanent:true, direction:'top'}); }
+  else youMarker.setLatLng(latlng);
+
+  // Draw path
+  const ll = track.map(p=>[p.lat,p.lng]);
+  if (routeLine){ /* keep plan line */ }
+  if (window.pathLine) { map.removeLayer(window.pathLine); }
+  window.pathLine = L.polyline(ll, { weight:4 }).addTo(map);
+
+  // Check waypoint hit (in order)
+  if (plan && visitedIdx < plan.waypoints.length){
+    const target = plan.waypoints[visitedIdx];
+    const d = haversine({lat:latitude,lng:longitude}, {lat:target.lat,lng:target.lng});
+    if (d <= plan.radius){
+      visitedIdx++; updateProgress();
+      document.getElementById('status').textContent = `✅ Titik #${visitedIdx} tercapai`;
+      if (visitedIdx === plan.waypoints.length){
+        document.getElementById('status').textContent = '🎉 Semua titik tercapai. Ekspor hasil.';
+        document.getElementById('exportJourney').disabled = false;
+      }
+    } else {
+      document.getElementById('status').textContent = `Berjalan… jarak ke target: ${Math.round(d)}m`;
+    }
+  }
+}
+
+function onError(err){
+  document.getElementById('status').textContent = 'GPS error: '+err.message;
+}
+
+document.getElementById('startBtn').onclick = ()=>{
+  if (!plan){ alert('Muat rencana (sales-plan.json) terlebih dahulu'); return; }
+  if (watchId) return;
+  track = []; visitedIdx = 0; updateProgress();
+  if (!navigator.geolocation){ alert('Geolocation tidak didukung'); return; }
+  document.getElementById('status').textContent = 'Memulai…';
+  watchId = navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy:true, maximumAge: 1000, timeout: 20000 });
+  document.getElementById('stopBtn').disabled = false;
+};
+
+document.getElementById('stopBtn').onclick = ()=>{
+  if (watchId){ navigator.geolocation.clearWatch(watchId); watchId = null; document.getElementById('status').textContent = 'Dihentikan'; }
+};
+
+// Export journey
+function download(filename, obj){
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj,null,2)], {type:'application/json'}));
+  const a = Object.assign(document.createElement('a'), { href:url, download:filename });
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+document.getElementById('exportJourney').onclick = ()=>{
+  const data = { type:'sales-journey', version:1, exportedAt: new Date().toISOString(), track };
+  download('sales-journey.json', data);
+};
+</script>
+</body>
+</html>
+```
+
+---
+
+## Cara pakai cepat
+
+1. Unggah dua file ini (`planner.html` dan `tracker.html`) ke repo GitHub dan aktifkan GitHub Pages.
+2. Buka `planner.html` di desktop/laptop.
+
+   * Klik peta untuk menambah titik berurutan.
+   * Atur **Radius** (default 50 m). Simpan dengan **Ekspor Rencana**.
+3. Buka `tracker.html` dari HP (URL GitHub Pages, pastikan HTTPS).
+
+   * Muat file rencana dari langkah 2.
+   * Tekan **Mulai Tracking** dan izinkan akses lokasi. Jalan sesuai urutan titik.
+   * Saat semua titik tercapai, **Ekspor Hasil Perjalanan** (JSON).
+4. Kembali ke `planner.html` → **Verifikasi hasil perjalanan** → unggah file dari HP untuk cek kecocokan (urutan & radius).
